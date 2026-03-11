@@ -129,7 +129,7 @@ if [ -n "${PX4_SIM_MODEL#*gz_}" ] && [ -z "${PX4_GZ_MODEL_NAME}" ]; then
 	# Verify the model actually appeared in the world (up to 10s)
 	SPAWN_VERIFY_ATTEMPTS=20
 	while [ $SPAWN_VERIFY_ATTEMPTS -gt 0 ]; do
-		if ${gz_command} topic -l 2>/dev/null | grep -q "^/model/${MODEL_NAME_INSTANCE}/"; then
+		if ${gz_command} topic -l 2>/dev/null | grep -q "/model/${MODEL_NAME_INSTANCE}/"; then
 			echo "INFO  [init] Model ${MODEL_NAME_INSTANCE} confirmed in world"
 			break
 		fi
