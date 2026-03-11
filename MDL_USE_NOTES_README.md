@@ -19,6 +19,12 @@ The baylands world definition (sdf) is at:
 `Tools/simulation/gz/worlds/baylands.sdf`
  - this is in a submodule (gz)
 
+Additionally, I made a simple custom world at `Tools/simulation/gz/worlds/april_test.sdf` that can be activated by setting `PX4_GZ_WORLD=april_test` and ensuring that the vo bringup (in MDL package) is run with sim and `gz_world="april_test"`. This custom april_test world is for use with gimbal drone and initial static AprilTag viewing
+ - AprilTag is placed in view of the camera without the drone needing to move but also not at horizontal pitch line
+ - allows for testing basic AprilTag perception and/or visual servoing without drone controls being up
+ - ```PX4_GZ_WORLD=april_test make px4_sitl gz_mdl_drone```
+ - ```ros2 launch MDL vo_bringup.launch.py use_sim:=true gz_world:="april_test"```
+
 Other worlds are at
 `Tools/simulation/gz/worlds/`
 and models etc are at
@@ -30,6 +36,15 @@ e.g.
  - to include things from this directory, can simply specify using a uri tag and the "model://" prefix which routes to the `Tools/simulation/gz/models` directory
    - e.g. the x500 drone is referenced via `<uri>model://x500</uri>` in our modified `baylands.sdf` file
 
+### Adding custom worlds/models
+It is very easy to add a model, just add a full directory with the name you want to reference the model by to the `Tools/simulation/gz/models` directory then follow notes above
+ - e.g. look at `Tools/simulation/gz/models/April Tag 0` and `Tools/simulation/gz/models/mdl_drone`
+
+Adding a custom world is similarly easy but has a few key requirements.
+ - Only need to add a new .sdf to the `Tools/simulation/gz/worlds/`
+ - world name in the sdf must match its name in the file (without `.sdf` suffix)
+ - use per usual by setting: `PX4_GZ_WORLD=<MY_WORLD>` env var when running `PX4 make sitl ...`
+ - e.g. look at `Tools/simulation/gz/worlds/april_test.sdf`, which is our custom AprilTag and perception without flight control testing world
 
 ---
 
