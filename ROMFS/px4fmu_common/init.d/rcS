@@ -442,9 +442,10 @@ else
 	# Manages USB interface
 	if ! cdcacm_autostart start
 	then
-		sercon
+		# sercon
 		echo "Starting MAVLink on /dev/ttyACM0"
-		mavlink start -d /dev/ttyACM0
+		# mavlink start -d /dev/ttyACM0 (DISABLED FOR UXRCE PORT)
+		echo "MAVLINK DISABLED ON /dev/ttyACM0 TO PREVENT CONFLICTS WITH UXRCE"
 	fi
 
 	#
