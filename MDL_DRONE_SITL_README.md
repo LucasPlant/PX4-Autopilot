@@ -14,7 +14,7 @@ We have created a custom simulation target to sandbox our physical changes witho
 
 * **Launch Command:** `make px4_sitl gz_mdl_drone`
 * **Airframe ID:** `4022_gz_mdl_drone`. This file configures the PX4 firmware to ignore the gimbal and points the simulator to spawn our custom SDF model.
-* **Model Name:** Gazebo spawns this instance under the model name `mdl_drone` (typically resulting in the ROS bridge namespace `mdl_drone_0`).
+* **Model Name:** Gazebo spawns this instance under the model name `mdl_drone` (resulting in the instance name `mdl_drone_0`).
 
 ## 3. Gazebo Physics Modification (The Welded SDF)
 
@@ -33,8 +33,9 @@ To perfectly emulate the rigid STS3215 servo, the simulated gimbal physics have 
 Because we bypass PX4, the `ros_gz_bridge` is solely responsible for bridging the camera and the servo commands. The launch file establishes:
 
 1. **Command Bridge:** Gazebo topic `/model/mdl_drone_0/gimbal/pitch_position_cmd` (`gz.msgs.Double` ← `std_msgs/Float64`), remapped to ROS 2 topic `/gimbal/pitch_position_cmd`. The HAL node publishes to the short ROS name; the bridge forwards it to the Gazebo JPC topic.
-2. **Image Bridge:** `.../sensor/camera/image` → `/camera/image_raw`.
-3. **Camera Info Bridge:** `.../sensor/camera/camera_info` → `/camera/camera_info`.
+2. **Image Bridge:** `/world/default/model/mdl_drone_0/link/camera_link/sensor/camera/image` → `/camera/image_raw`.
+3. **Camera Info Bridge:** `/world/default/model/mdl_drone_0/link/camera_link/sensor/camera/camera_info` → `/camera/camera_info`.
+4. **Joint State Bridge (NOT YET IN LAUNCH FILE):** For the TF tree (`robot_state_publisher`) to reflect the actual camera pitch angle, `/joint_states` must be published with the live `gimbal_pitch_joint` value. Without it the joint is frozen at 0 rad in TF. This requires either a `gz_joint_state_publisher` node or a `ros_gz_bridge` entry for the Gazebo model's joint state topic.
 
 ## 5. URDF Kinematics & Physical Offsets
 
