@@ -85,7 +85,7 @@ Requires Docker with Ubuntu 22.04 toolchain (build on Ubuntu 24.04 host is not s
 
 ```bash
 # Clone on host
-git clone https://github.com/PX4/PX4-Autopilot.git --branch v1.15.0 --recursive
+git clone https://github.com/LucasPlant/PX4-Autopilot.git --branch v1.15.0/fmu-v3-custom --recursive
 
 # Build inside Docker container
 docker run -it --rm \
