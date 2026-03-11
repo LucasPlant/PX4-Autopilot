@@ -121,13 +121,25 @@ if [ -n "${PX4_SIM_MODEL#*gz_}" ] && [ -z "${PX4_GZ_MODEL_NAME}" ]; then
 
 	echo "INFO  [init] Spawning model"
 
-	# Spawn model
+	# Spawn model (15s timeout to handle complex models in busy worlds)
 	${gz_command} service -s "/world/${PX4_GZ_WORLD}/create" --reqtype gz.msgs.EntityFactory \
-			--reptype gz.msgs.Boolean --timeout 5000 \
+			--reptype gz.msgs.Boolean --timeout 15000 \
 			--req "sdf_filename: \"${PX4_GZ_MODELS}/${MODEL_NAME}/model.sdf\", name: \"${MODEL_NAME_INSTANCE}\", allow_renaming: false${POSE_ARG}" > /dev/null 2>&1
 
-	# Wait for model to spawn
-	sleep 1
+	# Verify the model actually appeared in the world (up to 10s)
+	SPAWN_VERIFY_ATTEMPTS=20
+	while [ $SPAWN_VERIFY_ATTEMPTS -gt 0 ]; do
+		if ${gz_command} topic -l 2>/dev/null | grep -q "^/model/${MODEL_NAME_INSTANCE}/"; then
+			echo "INFO  [init] Model ${MODEL_NAME_INSTANCE} confirmed in world"
+			break
+		fi
+		SPAWN_VERIFY_ATTEMPTS=$((SPAWN_VERIFY_ATTEMPTS-1))
+		if [ $SPAWN_VERIFY_ATTEMPTS -eq 0 ]; then
+			echo "ERROR [init] Model ${MODEL_NAME_INSTANCE} did not appear in world after spawn"
+			exit 1
+		fi
+		sleep 0.5
+	done
 
 	# Start gz_bridge
 	if ! gz_bridge start -w "${PX4_GZ_WORLD}" -n "${MODEL_NAME_INSTANCE}"; then

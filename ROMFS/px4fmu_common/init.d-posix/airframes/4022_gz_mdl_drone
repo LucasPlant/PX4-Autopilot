@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# @name MDL Gazebo x500 pitch-only gimbal
+#
+# @type Quadrotor
+#
+
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=mdl_drone}
+
+. ${R}etc/init.d-posix/airframes/4001_gz_x500
+
+# Don't need gimbal settings since controlling directly via ROS2 and not going through PX4
