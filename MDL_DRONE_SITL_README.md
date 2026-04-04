@@ -13,8 +13,9 @@
 We have created a custom simulation target to sandbox our physical changes without breaking the default PX4 models.
 
 * **Launch Command:** `make px4_sitl gz_mdl_drone`
-* **Airframe ID:** `4022_gz_mdl_drone`. This file configures the PX4 firmware to ignore the gimbal and points the simulator to spawn our custom SDF model.
+* **Airframe ID:** `4022_gz_mdl_drone`. This file configures the PX4 firmware to ignore the gimbal and points the simulator to spawn our custom SDF model. It also disables QGC/RC failsafes (`NAV_DLL_ACT=0`, `NAV_RCL_ACT=0`) so the simulation runs headlessly, and disables DDS time sync (`UXRCE_DDS_SYNCT=0`) so ROS 2 receives pure Gazebo sim time.
 * **Model Name:** Gazebo spawns this instance under the model name `mdl_drone` (resulting in the instance name `mdl_drone_0`).
+* **Do not use `4001_gz_x500` directly** for any headless/ROS instance — it defaults to `NAV_DLL_ACT=2` (RTL on datalink loss) which immediately triggers a failsafe with no QGroundControl present.
 
 ## 3. Gazebo Physics Modification (The Welded SDF)
 
@@ -47,7 +48,28 @@ The `gimbal_drone_sim.urdf` has been mathematically updated to match the raw phy
 
 
 
-## 6. Agent Directives
+## 6. Airframe Parameter Policy (Headless/ROS Instances)
+
+Both PX4 instances in our simulation run headlessly — no QGroundControl, no RC transmitter, and ROS 2 must receive pure Gazebo sim time. The base `4001_gz_x500` airframe is unsuitable for this because it defaults to `NAV_DLL_ACT=2` (RTL on datalink loss). All custom airframes we create **must** override:
+
+| Param | Value | Reason |
+|-------|-------|--------|
+| `UXRCE_DDS_SYNCT` | `0` | ROS 2 must use pure Gazebo sim time |
+| `NAV_DLL_ACT` | `0` | No QGroundControl; disable datalink-loss failsafe |
+| `NAV_RCL_ACT` | `0` | No RC transmitter; disable RC-loss failsafe |
+
+**Our custom airframes:**
+- `4022_gz_mdl_drone` — main MDL drone (x500 + pitch-only gimbal)
+- `4023_gz_platform_ekf` — platform GPS telemetry instance (attaches to `platform_ekf` in baylands)
+
+**Platform EKF launch:**
+```bash
+PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4023 PX4_GZ_MODEL_NAME=platform_ekf \
+  ./build/px4_sitl_default/bin/px4 -i 2
+```
+Use `PX4_SYS_AUTOSTART=4023`, **not** `4001`, to ensure the failsafe and time-sync params are correct.
+
+## 7. Agent Directives
 
 1. **Assume the physics engine is correct.** Do not attempt to add software roll/yaw locks in ROS 2. The Gazebo joints are physically fixed.
 2. **Maintain strictly 1-DOF math.** The `gimbal_hal_sim.py` only needs to integrate the pitch velocity into a Float64 position and push it to the bridge.

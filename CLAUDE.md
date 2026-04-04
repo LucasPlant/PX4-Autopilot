@@ -18,7 +18,8 @@ PX4_GZ_WORLD=baylands PX4_GZ_PLATFORM_VEL=0.5 PX4_GZ_PLATFORM_HEADING_DEG=120 ma
 PX4_GZ_WORLD=baylands PX4_GZ_PLATFORM_VEL=0.5 PX4_GZ_PLATFORM_HEADING_DEG=120 make px4_sitl gz_x500_gimbal
 
 # Second PX4 instance — attaches to the platform_ekf model for GPS telemetry
-PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_NAME=platform_ekf ./build/px4_sitl_default/bin/px4 -i 2
+# Use 4023 (not 4001) — disables QGC/RC failsafes and DDS time sync for headless ROS use
+PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4023 PX4_GZ_MODEL_NAME=platform_ekf ./build/px4_sitl_default/bin/px4 -i 2
 ```
 
 **Simulation env vars:**

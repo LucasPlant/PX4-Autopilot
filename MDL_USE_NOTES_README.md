@@ -154,8 +154,9 @@ The MNT_* parameters in the airframe control PX4's gimbal module (which GZBridge
 | `Tools/simulation/gz/models/mdl_pitch_gimbal/model.sdf` | ✅ Done | Pitch-only gimbal SDF; JPC plugin subscribes to `/model/mdl_drone_0/gimbal/pitch_position_cmd` |
 | `Tools/simulation/gz/models/mdl_pitch_gimbal/model.config` | ✅ Done | |
 | `Tools/simulation/gz/models/mdl_pitch_gimbal/meshes/` | ✅ Done | Mesh files (also available from `model://gimbal/meshes/`) |
-| `ROMFS/px4fmu_common/init.d-posix/airframes/4022_gz_mdl_drone` | ✅ Done | Airframe: sets MNT_RC_IN_MODE=0 (external gimbal control), sources 4001_gz_x500 |
-| `ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt` | ✅ Done | `4022_gz_mdl_drone` registered |
+| `ROMFS/px4fmu_common/init.d-posix/airframes/4022_gz_mdl_drone` | ✅ Done | Airframe: disables QGC/RC failsafes and DDS time sync; sources 4001_gz_x500 |
+| `ROMFS/px4fmu_common/init.d-posix/airframes/4023_gz_platform_ekf` | ✅ Done | Airframe: platform GPS telemetry instance; disables QGC/RC failsafes and DDS time sync; sources 4001_gz_x500 |
+| `ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt` | ✅ Done | `4022_gz_mdl_drone` and `4023_gz_platform_ekf` registered |
 
 ## Bugs Fixed (were blocking `make px4_sitl gz_mdl_drone`)
 
@@ -188,6 +189,33 @@ INFO  [px4] Startup script returned successfully
 - Meshes: `mdl_pitch_gimbal/model.sdf` references `model://gimbal/meshes/...` for visuals (reuses the existing CGO3 gimbal geometry). The `mdl_pitch_gimbal/meshes/` directory contains local copies of those same meshes.
 - The JPC `sub_topic` field uses model-relative naming (no leading `/`). Gazebo prepends `/model/<instance_name>/` automatically, so `gimbal/pitch_position_cmd` → `/model/mdl_drone_0/gimbal/pitch_position_cmd`.
 
+
+---
+
+# Platform EKF Second PX4 Instance (`4023_gz_platform_ekf`)
+
+The `platform_ekf` model in `baylands.sdf` is an x500 rigidly fixed to the moving platform. A second PX4 instance attaches to it to publish GPS telemetry for the platform. Previously this used `PX4_SYS_AUTOSTART=4001` (the base `4001_gz_x500` airframe) directly.
+
+**Problem with using `4001_gz_x500` directly:**
+- `NAV_DLL_ACT=2` (RTL on datalink loss) — this instance has no QGroundControl and would immediately trigger a failsafe
+- `UXRCE_DDS_SYNCT` defaults to enabled — must be disabled so ROS 2 gets pure Gazebo sim time
+
+**Why not edit `4001_gz_x500`:**
+`4001_gz_x500` is sourced by every x500 variant (`4019_gz_x500_gimbal`, `4022_gz_mdl_drone`, etc.). Editing it would affect all x500 SITL targets.
+
+**Solution:** `4023_gz_platform_ekf` sources `4001_gz_x500` and overrides:
+
+| Param | Value | Reason |
+|-------|-------|--------|
+| `UXRCE_DDS_SYNCT` | `0` | ROS 2 must use pure Gazebo sim time, not wall-clock sync |
+| `NAV_DLL_ACT` | `0` | No QGroundControl connected; disable datalink-loss failsafe |
+| `NAV_RCL_ACT` | `0` | No RC transmitter; disable RC-loss failsafe |
+
+**Launch command (second terminal, after main drone is up):**
+```bash
+PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4023 PX4_GZ_MODEL_NAME=platform_ekf \
+  ./build/px4_sitl_default/bin/px4 -i 2
+```
 
 ---
 

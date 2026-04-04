@@ -9,4 +9,13 @@ PX4_SIM_MODEL=${PX4_SIM_MODEL:=mdl_drone}
 
 . ${R}etc/init.d-posix/airframes/4001_gz_x500
 
+# Disable DDS Time Synchronization so ROS 2 gets pure Gazebo Sim Time
+param set-default UXRCE_DDS_SYNCT 0
+
+# Disable the requirement for a Ground Control Station (QGC) heartbeat
+param set-default NAV_DLL_ACT 0
+
+# Disable the requirement for an RC remote/joystick connection
+param set-default NAV_RCL_ACT 0
+
 # Don't need gimbal settings since controlling directly via ROS2 and not going through PX4
