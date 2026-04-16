@@ -75,3 +75,100 @@ Use `PX4_SYS_AUTOSTART=4023`, **not** `4001`, to ensure the failsafe and time-sy
 2. **Maintain strictly 1-DOF math.** The `gimbal_hal_sim.py` only needs to integrate the pitch velocity into a Float64 position and push it to the bridge.
 3. **Trust the TF Tree.** The URDF matches the true physical offsets of the SDF. Use standard `tf2_ros` lookups for your state estimation; do not hardcode camera offsets into your Python nodes.
 
+---
+
+# Platform System Model (`platform_system`)
+
+The moving platform, AprilTags, and their joints have been extracted from `baylands.sdf` into a self-contained composite model at `Tools/simulation/gz/models/platform_system/`.
+
+## Contents
+
+- **`moving_platform` sub-model** — 5×5×0.1 m box, `libMovingPlatformController.so` plugin. Reads `PX4_GZ_PLATFORM_VEL` and `PX4_GZ_PLATFORM_HEADING_DEG`. `platform_link` center at z=2.0 in model frame; top surface at z=2.05.
+- **`apriltag_0_link`** — AprilTag 36h11 ID 0 at (+1.0, +1.0, 2.06). Mesh: `model://April Tag 0/meshes/AprilTags0.dae`.
+- **`apriltag_1_link`** — AprilTag 36h11 ID 1 at (−1.0, −1.0, 2.06). Mesh: `model://April Tag 1/meshes/AprilTags1.dae`.
+
+Tags are inlined as **non-static dynamic links** (not `<include>` sub-models) and welded via fixed joints to `moving_platform::platform_link`. A static nested model in Gazebo Harmonic is fixed to the world frame — it would not move with the platform.
+
+## Why `platform_ekf` Is NOT Inside `platform_system`
+
+PX4's gz_bridge constructs sensor topic paths as `/world/<world>/model/<name>/link/...`. If the x500 were nested inside `platform_system`, topics would route to `/world/<world>/model/platform_system/model/platform_ekf/link/...` and the second PX4 instance would fail to find sensors. The x500 must remain a **world-level model** with its joint referencing `platform_system::moving_platform::platform_link`.
+
+## `platform_test` World
+
+`Tools/simulation/gz/worlds/platform_test.sdf` is a minimal world (flat ground + sun) with the full `platform_system` + `platform_ekf` setup. Use it instead of baylands when you want moving platform tests without the overhead of downloading online Fuel models.
+
+```bash
+PX4_GZ_WORLD=platform_test PX4_GZ_PLATFORM_VEL=0.5 PX4_GZ_PLATFORM_HEADING_DEG=120 make px4_sitl gz_mdl_drone
+```
+
+Or use the infra script with `--platform-test` to bring up the full stack in one command:
+
+```bash
+bash ../ws_px4_ros/src/MDL/scripts/start_sim_infra.sh --platform-test
+```
+
+## Using in a New World
+
+Copy these three blocks verbatim from `baylands.sdf`:
+
+```xml
+<include>
+  <uri>model://platform_system</uri>
+  <name>platform_system</name>
+  <pose>0 0 0 0 0 0</pose>
+</include>
+<include>
+  <uri>model://x500</uri>
+  <name>platform_ekf</name>
+  <pose>2.0 2.0 2.2 0 0 0</pose>
+</include>
+<joint name="platform_to_ekf_fixed" type="fixed">
+  <parent>platform_system::moving_platform::platform_link</parent>
+  <child>platform_ekf::base_link</child>
+</joint>
+```
+
+---
+
+# Local AprilTag Models
+
+Three Ogre2-compatible AprilTag models live under `Tools/simulation/gz/models/`:
+
+| Directory | Tag ID | Texture source |
+|-----------|--------|----------------|
+| `April Tag 0/` | 0 | Original (Carl Cort) |
+| `April Tag 1/` | 1 | `../gazebo_apriltag` repo (Kenji Koide) |
+| `April Tag 2/` | 2 | `../gazebo_apriltag` repo (Kenji Koide) |
+
+Each model uses a COLLADA DAE file (2×2 m flat plane, scaled 0.5× → **1 m** physical tag) with an embedded Lambert texture — Ogre2-compatible. The `gazebo_apriltag` repo itself uses Ogre1 `.material` scripts which do not render under Gazebo Harmonic's default Ogre2 renderer; our format avoids that issue.
+
+To add more tag IDs: copy an existing `April Tag N/` directory, replace the PNG with the corresponding file from `../gazebo_apriltag/models/Apriltag36_11_000NN/materials/textures/`, and update the `<init_from>` line inside the DAE.
+
+---
+
+# Platform EKF Second PX4 Instance (`4023_gz_platform_ekf`)
+
+The `platform_ekf` x500 is rigidly fixed to the moving platform at corner position **(2.0, 2.0)** in world frame — near the +X/+Y corner of the 5×5 m platform. This better represents the physical GPS antenna mount on the real platform (off-center, near an edge) while keeping the drone body safely on the platform surface (0.5 m from the 2.5 m edge).
+
+**Spawn and URDF geometry:**
+- `platform_ekf` spawns at world (2.0, 2.0, 2.2). x500_base model offset = +0.24 m → `base_link` at world z = 2.44.
+- `platform_base_link` ≡ `platform_ekf::base_link` at world (2.0, 2.0, 2.44).
+- In `platform_base_link` frame (encoded in `platform_sim.urdf`):
+  - `landing_pad_center` (platform top surface center): (−2.0, −2.0, −0.39)
+  - `platform_tag_0` (AprilTag 0 at world (1.0, 1.0, 2.06)): (−1.0, −1.0, −0.38)
+
+**Airframe:** `4023_gz_platform_ekf` sources `4001_gz_x500` and overrides:
+
+| Param | Value | Reason |
+|-------|-------|--------|
+| `UXRCE_DDS_SYNCT` | `0` | ROS 2 must use pure Gazebo sim time |
+| `NAV_DLL_ACT` | `0` | No QGroundControl; disable datalink-loss failsafe |
+| `NAV_RCL_ACT` | `0` | No RC transmitter; disable RC-loss failsafe |
+
+**Launch command:**
+```bash
+PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4023 PX4_GZ_MODEL_NAME=platform_ekf \
+  ./build/px4_sitl_default/bin/px4 -i 2
+```
+Use `4023`, **not** `4001` — the base airframe defaults to RTL on datalink loss.
+

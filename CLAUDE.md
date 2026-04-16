@@ -11,6 +11,9 @@ make px4_sitl gz_x500_gimbal
 # Gimbal drone, baylands world (pretty scenery)
 make px4_sitl gz_x500_gimbal_baylands
 
+# Lightweight moving platform test (no baylands overhead) + platform EKF drone
+PX4_GZ_WORLD=platform_test PX4_GZ_PLATFORM_VEL=0.5 PX4_GZ_PLATFORM_HEADING_DEG=120 make px4_sitl gz_mdl_drone
+
 # Baylands world + moving platform + platform EKF drone (no gimbal)
 PX4_GZ_WORLD=baylands PX4_GZ_PLATFORM_VEL=0.5 PX4_GZ_PLATFORM_HEADING_DEG=120 make px4_sitl gz_x500
 
@@ -100,10 +103,46 @@ The `MovingPlatformController` reads `PX4_SIM_MODEL` to determine the vehicle na
 
 The custom baylands world includes:
 - Online Fuel models: baylands park, Coast Water
-- `moving_platform` — flat 5×5m platform with `MovingPlatformController` plugin
-- `platform_ekf` — an `x500` model **fixed** to the platform via a world joint (simulates a second GPS/PX4 mounted on the platform)
+- `platform_system` — composite model (see `Tools/simulation/gz/models/platform_system/`) containing:
+  - `moving_platform` sub-model — flat 5×5m platform with `MovingPlatformController` plugin
+  - `apriltag_0_link` / `apriltag_1_link` — AprilTag 36h11 ID 0 and ID 1 markers, welded flush to the platform surface (1 cm clearance for z-fighting avoidance). Use DAE mesh format (Ogre2-compatible). Sourced from local `model://April Tag 0` and `model://April Tag 1`.
+- `platform_ekf` — an `x500` model kept as a **world-level** model (not nested inside `platform_system`) so PX4's gz_bridge can find its sensor topics at the standard `/world/<world>/model/platform_ekf/...` path. Welded to `platform_system::moving_platform::platform_link` via a world joint. Spawned at (2.0, 2.0) — near the +X/+Y corner of the platform to better represent the real-world GPS antenna mount position.
 
 The main flying drone is **dynamically spawned** (not in the SDF), controlled by the first PX4 instance. The `platform_ekf` drone is controlled by a second PX4 instance (`-i 2`) that attaches via `PX4_GZ_MODEL_NAME=platform_ekf`.
+
+## Local AprilTag Models
+
+Three AprilTag 36h11 models live under `Tools/simulation/gz/models/`:
+
+| Directory | Tag ID | Mesh |
+|-----------|--------|------|
+| `April Tag 0/` | ID 0 | `meshes/AprilTags0.dae` + `tag36h11-0.png` |
+| `April Tag 1/` | ID 1 | `meshes/AprilTags1.dae` + `tag36h11-1.png` |
+| `April Tag 2/` | ID 2 | `meshes/AprilTags2.dae` + `tag36h11-2.png` |
+
+All use a 2×2 m flat plane mesh scaled 0.5× → **1 m** physical tag size. Textures for IDs 1 and 2 were sourced from the [gazebo_apriltag](https://github.com/koide3/gazebo_apriltag) repo (Kenji Koide). The DAE/mesh format is **Ogre2-compatible** (Gazebo Harmonic default renderer), unlike the classic Ogre1 `.material` script format used by that repo.
+
+To add more tag IDs: copy the `April Tag N` directory, swap the PNG from `../gazebo_apriltag/models/Apriltag36_11_000NN/materials/textures/`, and update the `<init_from>` line in the DAE.
+
+## Sim Infrastructure Script
+
+`../ws_px4_ros/src/MDL/scripts/start_sim_infra.sh` launches the full sim stack (XRCE agent, PX4 SITL, platform EKF) each in its own tmux window.
+
+```bash
+# baylands (default)
+bash scripts/start_sim_infra.sh
+
+# lightweight platform_test world (no Fuel downloads)
+bash scripts/start_sim_infra.sh --platform-test
+
+# headless + platform_test
+bash scripts/start_sim_infra.sh platform_test 0.5 120 1
+
+# with QGroundControl
+bash scripts/start_sim_infra.sh --qgc
+```
+
+Flags: `--platform-test` overrides world to `platform_test`; `--qgc` launches QGroundControl; positional args are `[GZ_WORLD] [PLATFORM_VEL] [PLATFORM_HEADING_DEG] [HEADLESS]`.
 
 ## Known Issues / Notes
 

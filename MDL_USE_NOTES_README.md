@@ -14,10 +14,25 @@ In general, the airframes for simulation are defined under `ROMFS/px4fmu_common/
  - Modifications to these files allow for parameter setting applied on startup
    - e.g. for the gimbal quadcopter (`4019_gz_x500_gimbal`), MNT_* params are set here
 
+## Sim Infrastructure Script
+
+`../ws_px4_ros/src/MDL/scripts/start_sim_infra.sh` launches the full sim stack (XRCE agent, PX4 SITL, platform EKF) each in its own tmux window. Usage:
+```bash
+bash scripts/start_sim_infra.sh [GZ_WORLD] [PLATFORM_VEL] [PLATFORM_HEADING_DEG] [HEADLESS] [--qgc] [--platform-test]
+```
+ - `--platform-test`: override world to `platform_test` (lightweight, no Fuel downloads)
+ - `--qgc`: also launch QGroundControl
+ - Default world is baylands
+
 ## Gazebo Worlds and Models
 The baylands world definition (sdf) is at:
 `Tools/simulation/gz/worlds/baylands.sdf`
  - this is in a submodule (gz)
+ - includes `platform_system` (see below) + `platform_ekf` drone at corner (2.0, 2.0) of platform
+
+I also made a lightweight moving platform world at `Tools/simulation/gz/worlds/platform_test.sdf` — empty world base with `platform_system` + `platform_ekf` dropped in. Same as baylands functionally but no online Fuel downloads, so it loads much faster.
+ - ```PX4_GZ_WORLD=platform_test PX4_GZ_PLATFORM_VEL=0.5 PX4_GZ_PLATFORM_HEADING_DEG=120 make px4_sitl gz_mdl_drone```
+ - Second instance: ```PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4023 PX4_GZ_MODEL_NAME=platform_ekf ./build/px4_sitl_default/bin/px4 -i 2```
 
 Additionally, I made a simple custom world at `Tools/simulation/gz/worlds/april_test.sdf` that can be activated by setting `PX4_GZ_WORLD=april_test` and ensuring that the vo bringup (in MDL package) is run with sim and `gz_world="april_test"`. This custom april_test world is for use with gimbal drone and initial static AprilTag viewing
  - AprilTag is placed in view of the camera without the drone needing to move but also not at horizontal pitch line
@@ -30,7 +45,15 @@ Other worlds are at
 and models etc are at
 `Tools/simulation/gz/models`
 e.g.
- - moving platform is at `Tools/simulation/gz/models/moving_platform`,
+ - **platform system** (moving platform + AprilTags) is at `Tools/simulation/gz/models/platform_system`
+   - contains: moving platform (5×5m box, `libMovingPlatformController.so`), AprilTag 0 at (+1, +1) and AprilTag 1 at (-1, -1) on surface
+   - designed to be dropped into any world — see header comment in `model.sdf` for the 3-block world snippet
+   - `moving_platform/` still exists as a standalone model but is no longer used directly in worlds
+ - **AprilTag models** (Ogre2-compatible DAE+PNG, 1 m tag size after 0.5× scale):
+   - `April Tag 0/` — tag ID 0 (original)
+   - `April Tag 1/` — tag ID 1 (texture from `../gazebo_apriltag` repo)
+   - `April Tag 2/` — tag ID 2 (texture from `../gazebo_apriltag` repo)
+   - To add more: copy the directory, swap PNG from `../gazebo_apriltag/models/Apriltag36_11_000NN/materials/textures/`, update `<init_from>` in the DAE
  - gimbal quadcopter is at `Tools/simulation/gz/models/x500_gimbal` (just the normal quadcopter plus the gimbal)
  - regular basic quadcopter is at `Tools/simulation/gz/models/x500`
  - to include things from this directory, can simply specify using a uri tag and the "model://" prefix which routes to the `Tools/simulation/gz/models` directory
